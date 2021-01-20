@@ -4,8 +4,11 @@
 #
 #    pip-compile
 #
-clip.py==0.3.2            # via -r requirements.in
-colorama==0.4.4           # via -r requirements.in
-configobj==5.0.6          # via -r requirements.in
-pika==1.1.0               # via -r requirements.in
-six==1.15.0               # via configobj
+colorama==0.4.4
+    # via -r requirements.in
+configobj==5.0.6
+    # via -r requirements.in
+pika==1.1.0
+    # via -r requirements.in
+six==1.15.0
+    # via configobj

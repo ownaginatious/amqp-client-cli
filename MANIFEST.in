@@ -1,5 +1,3 @@
 include LICENSE
-include README.rst
+include README.md
 include requirements.txt
-include versioneer.py
-include amqp_client_cli/_version.py

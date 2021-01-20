@@ -28,18 +28,18 @@ pip install amqp_client_cli
 `amqp-client-cli` is run via the `amqpcli` command. Run the `help` subcommand to see the list of options:
 
 ```
-$ amqpcli help
-amqpcli: A command line interface for interacting with amqp exchanges
+$ amqpcli --help
+usage: amqpcli [-h] {send,config} ...
 
-Usage: amqpcli {{options}} {{subcommand}}
+A command line interface for interacting with amqp exchanges
 
-Options:
-  -h, --help     Show this help message and exit
-  -n, --nocolor  Do not colorize output
+positional arguments:
+  {send,config}
+    send         Send a message to an exchange.
+    config       Configure the amqpcli client.
 
-Subcommands:
-  config  Configure the amqpcli client
-  send    Send a message to an exchange
+optional arguments:
+  -h, --help     show this help message and exit
 ```
 
 ### Let's send a message!
@@ -47,25 +47,28 @@ Subcommands:
 Sending messages can be done using the `amqpcli send` command.
 
 ```
-amqpcli send: Send a message to an exchange
+$amqpcli send --help
+usage: amqpcli send [-h] [-n] (-m MESSAGE | -f FILE_PATH) [-p] [-s] [-u USER] [-v VHOST]
+                    host port exchange routing_key
 
-Usage: send {{arguments}} {{options}}
+positional arguments:
+  host                  Address of the amqp server.
+  port                  Port of the amqp server.
+  exchange              Name of the exchange being sent to.
+  routing_key           The routing key for the message.
 
-Arguments:
-  host [text]         Address of the amqp server
-  port [int]          Port of the amqp server
-  exchange [text]     Name of the exchange being sent to
-  routing_key [text]  The routing key for the message
-
-Options:
-  -h, --help              Show this help message and exit
-  -m, --message [text]    String to use as the message body
-  -f, --file-path [text]  Path of a file to use as the message body
-  -p, --persistent        Make the message persistent if routed to a durable queue
-  -s, --ssl               Use ssl/tls as the connection protocol
-  -u, --user [text]       User to connect to the queue as
-  -v, --vhost [text]      The vhost to connect to
-  -n, --nocolor           Do not colorize output
+optional arguments:
+  -h, --help            show this help message and exit
+  -n, --nocolor         Do not colorize output.
+  -m MESSAGE, --message MESSAGE
+                        String to use as the message body.
+  -f FILE_PATH, --file-path FILE_PATH
+                        Path of a file to use as the message body.
+  -p, --persistent      Make the message persistent if routed to a durable queue.
+  -s, --ssl             Use ssl/tls as the connection protocol.
+  -u USER, --user USER  User to connect to the queue as.
+  -v VHOST, --vhost VHOST
+                        The vhost to connect to.
 ```
 
 Let's assume we have a [RabbitMQ](https://www.rabbitmq.com) server listening at `localhost:5671` with an exchange we would like to send a message to named `exchange_a` on a vhost `my_vhost` with a routing key of `simple_message`. We are going to send via the `guest` user.
@@ -104,17 +107,17 @@ You can optionally add user credentials to a config file for use with the tool (
 Configuration options can be seen from the command line.
 
 ```
-amqpcli config: Configure the amqpcli client
+$ amqpcli config --help
+usage: amqpcli config [-h] {add_user,delete_user,list_users} ...
 
-Usage: config {{options}} {{subcommand}}
+positional arguments:
+  {add_user,delete_user,list_users}
+    add_user            Add a new queue user to config or edit an existing one.
+    delete_user         Delete an existing user from the config.
+    list_users          List existing users in config.
 
-Options:
-  -h, --help     Show this help message and exit
-  -n, --nocolor  Do not colorize output
-
-Subcommands:
-  add_user     Add a new queue user
-  delete_user  Remove an existing queue user
+optional arguments:
+  -h, --help            show this help message and exit
 ```
 
 With `add_user`, you will be prompted for a username, password, and vhost (default is `/`).

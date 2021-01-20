@@ -1,184 +1,230 @@
-from getpass import getpass
+import argparse
+import ssl
 import os
 import sys
-import clip
-import pika
-from colorama import init, Back, Fore, Style
-from configobj import ConfigObj
+from getpass import getpass
 
-app = clip.App()
+import pika
+from colorama import Fore
+from colorama import init as color_init
+from configobj import ConfigObj
 
 CONFIG_FILE_PATH = os.path.expanduser("~/.amqpclirc")
 if os.path.exists(CONFIG_FILE_PATH):
-    USER_MAP = ConfigObj(infile=CONFIG_FILE_PATH,
-                         encoding='utf8')
+    USER_MAP = ConfigObj(infile=CONFIG_FILE_PATH, encoding="utf8")
 else:
-    USER_MAP = ConfigObj(encoding='utf8')
+    USER_MAP = ConfigObj(encoding="utf8")
     USER_MAP.filename = CONFIG_FILE_PATH
 
 
-def get_password(user):
-    password = os.getenv('AMQP_PASSWORD', None)
-    if password:
-        return password
-    user_record = USER_MAP.get('users', {}).get(user, None)
-    if user_record:
-        return user_record['password']
-    return getpass(Fore.GREEN + "Password: " + Fore.RESET)
-
-
-def get_vhost(user):
-    vhost = os.getenv('AMQP_VHOST', None)
-    if vhost:
-        return vhost
-    user_record = USER_MAP.get('users', {}).get(user, None)
-    if user_record:
-        return user_record['vhost']
-    return '/'
-
-
-def colorize(nocolor):
-    init(strip=nocolor)
-
-
-def print_failure(message, out=sys.stderr):
-    out.write("%s%s%s\n" % (Fore.RED, message, Fore.RESET))
-
-
-def print_success(message):
-    sys.stdout.write("%s%s%s\n" % (Fore.GREEN, message, Fore.RESET))
-
-
-@app.main(description='A command line interface for interacting with '
-                      'amqp exchanges')
-@clip.flag('-n', '--nocolor', name='nocolor',
-           default=False, hidden=True,
-           help='Do not colorize output',
-           inherit_only=True, callback=colorize)
-def amqpcli():
-    pass
-
-
-@amqpcli.subcommand(
-    name='send',
-    description='Send a message to an exchange',
-    inherits=('nocolor',))
-@clip.arg('host', name='host', required=True,
-          help='Address of the amqp server')
-@clip.arg('port', name='port', type=int, required=True,
-          help='Port of the amqp server')
-@clip.arg('exchange', name='exchange', required=True,
-          help='Name of the exchange being sent to')
-@clip.arg('routing_key', name='routing_key', required=True,
-          help='The routing key for the message')
-@clip.opt('-m', '--message', name='message', required=False,
-          help='String to use as the message body')
-@clip.opt("-f", "--file-path", name="file_path", required=False,
-          help="Path of a file to use as the message body",
-          default=None)
-@clip.flag('-p', '--persistent', name='persistent',
-           help='Make the message persistent if routed to a durable queue',
-           default=False)
-@clip.flag('-s', '--ssl', name='ssl',
-           help='Use ssl/tls as the connection protocol',
-           default=False)
-@clip.opt('-u', '--user', name='user',
-          help='User to connect to the queue as')
-@clip.opt('-v', '--vhost', name='vhost',
-          help='The vhost to connect to',
-          required=False, default=None)
-def amqp_send(host, port, exchange, routing_key, message,
-              file_path, user, persistent, vhost, ssl, **kwargs):
-    if not user:
-        user = os.getenv('AMQP_USER', None)
+def amqp_send(
+    host,
+    port,
+    exchange,
+    routing_key,
+    message,
+    file_path,
+    user,
+    persistent,
+    vhost,
+    ssl_,
+):
     try:
         if not user:
-            user = input(Fore.GREEN + "User: " + Fore.RESET)
+            user = input(f"{Fore.GREEN}User: {Fore.RESET}")
         password = get_password(user)
         vhost = vhost or get_vhost(user)
     except KeyboardInterrupt:
-        print_failure("\nTerminated from keyboard")
+        print_failure("\nTerminated from keyboard.")
         sys.exit(1)
-
-    if not ((message is None) ^ (file_path is None)):
-        print_failure('Exactly one option (-f) or (-m) '
-                      'must be specified',)
-        clip.exit(err=True)
 
     properties = pika.BasicProperties(delivery_mode=2 if persistent else 1)
     credentials = pika.PlainCredentials(user, password)
-    sys.stdout.write("Connecting to queue @ %s:%s... " % (host, port))
+    sys.stdout.write(f"Connecting to queue @ {host}:{port}... ")
     try:
-        connection = pika.BlockingConnection(pika.ConnectionParameters(
-                                             host=host, port=port, ssl=ssl,
-                                             virtual_host=vhost,
-                                             credentials=credentials))
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host=host,
+                port=port,
+                ssl_options=pika.SSLOptions(context=ssl.create_default_context())
+                if ssl_
+                else None,
+                virtual_host=vhost,
+                credentials=credentials,
+            )
+        )
     except pika.exceptions.AMQPError as e:
         print_failure("FAILED!", out=sys.stdout)
-        print_failure("Failure reason: %s" % repr(e))
+        print_failure(f"Failure reason: {repr(e)}")
         sys.exit(1)
 
     print_success("SUCCESS!")
 
     if message:
-        body = message.encode('utf-8')
+        body = message.encode("utf-8")
     else:
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             body = f.read()
     channel = connection.channel()
     try:
-        channel.basic_publish(exchange=exchange, routing_key=routing_key,
-                              body=body, properties=properties)
+        channel.basic_publish(
+            exchange=exchange, routing_key=routing_key, body=body, properties=properties
+        )
     finally:
         channel.close()
-    print_success("Message successfully published to exchange [%s]!"
-                  % exchange)
+    print_success(f"Message successfully published to exchange [{exchange}]!")
 
 
-@amqpcli.subcommand(name='config',
-                    description='Configure the amqpcli client',
-                    inherits=('nocolor',))
-def amqp_config():
-    pass
-
-
-@amqp_config.subcommand(
-    name='add_user',
-    description='Add a new queue user or edit an existing one',
-    inherits=('nocolor',))
-def amqp_add_user():
-    new_user = input(Fore.GREEN + "User: " + Fore.RESET)
-    new_pass = getpass(Fore.GREEN + "Password: " + Fore.RESET)
-    new_vhost = input(Fore.GREEN + "vhost? [/]: " + Fore.RESET) or '/'
-    USER_MAP['users'] = USER_MAP.get('users', {})
-    USER_MAP['users'][new_user] = {}
-    USER_MAP['users'][new_user]['vhost'] = new_vhost
-    USER_MAP['users'][new_user]['password'] = new_pass
+def add_user():
+    new_user = input(f"{Fore.GREEN}User: {Fore.RESET}")
+    new_pass = getpass(f"{Fore.GREEN}Password: {Fore.RESET}")
+    new_vhost = input(f"{Fore.GREEN}vhost? [/]: {Fore.RESET}") or "/"
+    USER_MAP["users"] = USER_MAP.get("users", {})
+    USER_MAP["users"][new_user] = {}
+    USER_MAP["users"][new_user]["vhost"] = new_vhost
+    USER_MAP["users"][new_user]["password"] = new_pass
     USER_MAP.write()
 
 
-@amqp_config.subcommand(
-    name='delete_user',
-    description='Remove an existing queue user',
-    inherits=('nocolor',))
-@clip.arg('user', name='user',
-          help='User to delete',
-          required=True)
-def amqp_delete_user(user):
-    users = USER_MAP.get('users', {})
+def delete_user(user):
+    users = USER_MAP.get("users", {})
     if user not in users:
-        print_failure('No such user \'%s\' configured' % user)
-        clip.exit(err=True)
+        print_failure(f"No such user '{user}' configured.")
+        sys.exit(1)
     del users[user]
     USER_MAP.write()
-    print_success("Configuration for user '%s' deleted" % user)
+    print_success(f"Configuration for user '{user}' deleted.")
+
+
+def list_users():
+    users = USER_MAP.get("users", {})
+    for user in sorted(users.keys()):
+        print_success(user)
+
+
+def get_password(user):
+    password = os.getenv("AMQP_PASSWORD", None)
+    if password:
+        return password
+    user_record = USER_MAP.get("users", {}).get(user, None)
+    if user_record:
+        return user_record["password"]
+    return getpass(f"{Fore.GREEN}Password: {Fore.RESET}")
+
+
+def get_vhost(user):
+    vhost = os.getenv("AMQP_VHOST", None)
+    if vhost:
+        return vhost
+    user_record = USER_MAP.get("users", {}).get(user, None)
+    if user_record:
+        return user_record["vhost"]
+    return "/"
+
+
+def print_failure(message, out=sys.stderr):
+    out.write(f"{Fore.RED}{message}{Fore.RESET}\n")
+
+
+def print_success(message):
+    sys.stdout.write(f"{Fore.GREEN}{message}{Fore.RESET}\n")
+
+
+def add_no_colorize(parser):
+    parser.add_argument(
+        "-n",
+        "--nocolor",
+        action="store_true",
+        default=False,
+        help="Do not colorize output.",
+    )
 
 
 def main():
-    try:
-        app.run()
-    except clip.ClipExit as e:
-        sys.exit(e.status)
+    parser = argparse.ArgumentParser(
+        description="A command line interface for interacting with amqp exchanges"
+    )
+    subparsers = parser.add_subparsers(required=True, dest="operation")
 
-if __name__ == '__main__':
+    # Send
+
+    send_parser = subparsers.add_parser("send", help="Send a message to an exchange.")
+    add_no_colorize(send_parser)
+    send_parser.add_argument("host", help="Address of the amqp server.")
+    send_parser.add_argument("port", type=int, help="Port of the amqp server.")
+    send_parser.add_argument("exchange", help="Name of the exchange being sent to.")
+    send_parser.add_argument("routing_key", help="The routing key for the message.")
+    group = send_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-m", "--message", help="String to use as the message body.")
+    group.add_argument(
+        "-f", "--file-path", help="Path of a file to use as the message body."
+    )
+    send_parser.add_argument(
+        "-p",
+        "--persistent",
+        action="store_true",
+        help="Make the message persistent if routed to a durable queue.",
+    )
+    send_parser.add_argument(
+        "-s",
+        "--ssl",
+        action="store_true",
+        help="Use ssl/tls as the connection protocol.",
+    )
+    send_parser.add_argument(
+        "-u",
+        "--user",
+        default=os.getenv("AMQP_USER"),
+        help="User to connect to the queue as.",
+    )
+    send_parser.add_argument("-v", "--vhost", help="The vhost to connect to.")
+    send_parser.set_defaults(
+        func=lambda args: amqp_send(
+            args.host,
+            args.port,
+            args.exchange,
+            args.routing_key,
+            args.message,
+            args.file_path,
+            args.user,
+            args.persistent,
+            args.vhost,
+            args.ssl,
+        )
+    )
+
+    # Config
+
+    config_parser = subparsers.add_parser(
+        "config", help="Configure the amqpcli client."
+    )
+    cfg_subparsers = config_parser.add_subparsers(required=True, dest="operation")
+
+    add_user_parser = cfg_subparsers.add_parser(
+        "add_user", help="Add a new queue user to config or edit an existing one."
+    )
+    add_no_colorize(add_user_parser)
+    add_user_parser.set_defaults(func=lambda _: add_user())
+
+    delete_user_parser = cfg_subparsers.add_parser(
+        "delete_user", help="Delete an existing user from the config."
+    )
+    delete_user_parser.add_argument("user", help="User to delete.")
+    add_no_colorize(delete_user_parser)
+    delete_user_parser.set_defaults(func=lambda args: delete_user(args.user))
+
+    list_users_parser = cfg_subparsers.add_parser(
+        "list_users", help="List existing users in config."
+    )
+    add_no_colorize(list_users_parser)
+    list_users_parser.set_defaults(func=lambda _: list_users())
+
+    args = parser.parse_args()
+    if args.nocolor:
+        Fore.GREEN, Fore.RED, Fore.RESET = '', '', ''
+
+    args.func(args)
+
+
+if __name__ == "__main__":
     main()

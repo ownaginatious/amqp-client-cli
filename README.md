@@ -1,3 +1,6 @@
+[![PyPI Version](https://badge.fury.io/py/amqp_client_cli.svg)](https://pypi.org/project/amqp_client_cli/)
+[![Supported Versions](https://img.shields.io/pypi/pyversions/amqp-client-cli.svg)](https://pypi.org/project/amqp-client-cli)
+
 # amqp-client-cli
 A simple CLI tool for sending amqp messages to exchanges.
 

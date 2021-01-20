@@ -1,6 +1,6 @@
 import argparse
-import ssl
 import os
+import ssl
 import sys
 from getpass import getpass
 
@@ -221,7 +221,7 @@ def main():
 
     args = parser.parse_args()
     if args.nocolor:
-        Fore.GREEN, Fore.RED, Fore.RESET = '', '', ''
+        Fore.GREEN, Fore.RED, Fore.RESET = "", "", ""
 
     args.func(args)
 
